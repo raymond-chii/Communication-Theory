@@ -39,28 +39,28 @@ encode_phase = [first, second, third, forth, fifth]
 % c
 
 E_0 = 1;
-d_1 = 2*sqrt(E_0) % d_min
+d_1 = 2*sqrt(E_0)
 d_2 = sqrt(2)*2*sqrt(E_0)
-d_3 = sqrt(4*sqrt(E_0)^2+(2*sqrt(E_0))^2)
-d_4 = sqrt((-sqrt(E_0))^2+(-sqrt(E_0))^2)
-d_5 = 3*2*sqrt(E_0)
-d_6 = 2*2*sqrt(E_0)
+d_3 = 2*2*sqrt(E_0)
+d_4 = sqrt(4*sqrt(E_0)^2+(2*sqrt(E_0))^2)
+d_5 = sqrt((sqrt(E_0))^2+(-sqrt(3*E_0))^2)
+d_6 = sqrt((-sqrt(E_0))^2+(-sqrt(E_0))^2)
 
 
-distances = [d_1, d_2, d_3, d_4, d_5, d_6];
+distances = [d_1, d_2, d_3, d_4, d_5, d_6, d_7, d_8];
 sorted_distances = sort(distances);
 
-counters = 0;
+counters = zeros(size(sorted_distances));
 
 for i = 1:length(sorted_distances)
     for j = 1:length(distances)
         if distances(j) == sorted_distances(i)
-            counters = counters + 1;
+            counters(i) = counters(i) + 1;
         end
     end
 end
 
-disp(['Total Pairs: ' num2str(counters)]);
+disp(['Total Pairs (should be 8 x 7): ' num2str(sum(counters))]);
 % d
 M = 8;
 gamma_b_values = linspace(0, 10, 100);  

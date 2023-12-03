@@ -1,0 +1,146 @@
+clc
+clear 
+close all
+
+%%%% Lei(Raymond) Chi ps 06
+
+%% c
+rolloff = 0.3;
+span = 4;
+sps = 8; 
+Rb = 1e6; 
+
+
+Rs = Rb / (log2(span) * sps);
+
+% Design the square-root raised cosine filter using rcosdesign
+filterCoeff = rcosdesign(rolloff, span, sps, 'sqrt');
+%% d
+p = filterCoeff;
+g = conv(p, fliplr(p)); 
+time_p = 0:length(p)-1;
+time_g = 0:length(g)-1;
+
+subplot(2,1,1);
+stem(time_p, p, 'Marker', 'o', 'LineWidth', 1.5);
+title('Impulse Response p[n]');
+xlabel('n');
+ylabel('Amplitude');
+grid on;
+xlim([0, 70]);
+subplot(2,1,2);
+stem(time_g, g, 'Marker', 'o', 'LineWidth', 1.5);
+title('Matched Filter Output g[n]');
+xlabel('n');
+ylabel('Amplitude');
+grid on;
+% xlim([0, 35]);
+
+%% e
+
+[maxValue, maxIndex] = max(g)
+
+%% f
+L = sps;
+m_values = 0:50;
+SIR_dB = zeros(size(m_values));
+a_m = 1;
+
+for m = m_values
+    sample_time = maxIndex + m * L;
+    if sample_time <= length(g) && sample_time - L  >= 1
+        target_value = a_m * g(sample_time);
+        interference_sum = sum(abs(g(sample_time - L + 1:sample_time - 1)).^2);
+        
+        SIR_linear = target_value^2 / interference_sum;
+
+        SIR_dB(m + 1) = 10 * log10(SIR_linear);
+    end
+end
+
+
+%% g
+W = 81.25 * 10^3; 
+t = linspace(0, span / Rs, span * sps + 1);
+f = linspace(0, W, length(t));
+G_f = sqrt((sinc(f / Rs)).^2 .* (sinc((f - Rs) / Rs)).^2);
+g_t = ifft(G_f);
+
+% Plot
+figure;
+stem(t, g_t, 'LineWidth', 1.5);
+title('Impulse Response within [0, W]');
+xlabel('Time (s)');
+ylabel('Amplitude');
+grid on;
+
+
+%% h
+ava_ber = zeros(4,10); 
+ava_rms = zeros(4,10);
+
+SNR_dB = [50000000 -5 5 10];
+
+
+for t = 1:10
+    for SNR_dB = [50000000 -5 5 10]
+    numofBits = 10^6;
+    bits = randi([0, 1], 1, numofBits);
+    
+    qpskSymbols = zeros(1, numofBits / 2);
+    
+    for n = 1:length(bits)/2
+        p = bits(2*n);
+        imp = bits(2*n-1);
+        if (imp == 0) && (p == 0)
+            qpskSymbols(n) = exp(1j * pi/4);  % 45 degrees
+        end
+        if (imp == 1) && (p == 0)
+            qpskSymbols(n) = exp(1j * 3*pi/4);  % 135 degrees
+        end
+        if (imp == 1) && (p == 1)
+            qpskSymbols(n) = exp(1j * 5*pi/4);  % 225 degrees
+        end
+        if (imp == 0) && (p == 1)
+            qpskSymbols(n) = exp(1j * 7*pi/4);  % 315 degrees
+        end
+    end
+    SNR_dB = 100000000;
+    
+    sigma = sqrt(10^(-SNR_dB/10));
+    noise = sigma * (randn(size(qpskSymbols)) + 1j * randn(size(qpskSymbols)));
+    receivedSignal = qpskSymbols + noise;
+    
+    filterCoeff = rcosdesign(rolloff, span, sps, 'sqrt');
+    filteredSignal = conv(receivedSignal, filterCoeff);
+    receivedSymbols = filteredSignal(1:sps:end);
+   
+    decodedBits = zeros(1, length(receivedSymbols) * 2);
+        
+    for i = 1:length(receivedSymbols)
+        quadrant = sign(real(receivedSymbols(i))) + 1j * sign(imag(receivedSymbols(i)));
+        switch quadrant
+            case 1 + 1j
+                decodedBits(2*i - 1:2*i) = [1 0];
+            case 1 - 1j
+                decodedBits(2*i - 1:2*i) = [1 1];
+            case -1 + 1j
+                decodedBits(2*i - 1:2*i) = [0 0];
+            case -1 - 1j
+                decodedBits(2*i - 1:2*i) = [0 1];
+        end
+    end
+    
+    bits = bits(1:length(decodedBits));
+    numErrors = sum(decodedBits ~= bits);
+    ava_ber(1,t) = numErrors / numofBits;
+    
+    qpskSymbols = qpskSymbols(1:length(receivedSymbols));
+    ava_rms(1,t) = mean((qpskSymbols - receivedSymbols).^2);
+    end
+end
+
+
+disp(['Average BER: ' num2str(mean(ava_ber))]);
+disp(['Average RMS: ' num2str(mean(ava_rms))]);
+
