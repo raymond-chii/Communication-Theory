@@ -1,4 +1,4 @@
-clc
+ clc
 clear
 close all
 
@@ -39,74 +39,78 @@ encode_phase = [first, second, third, forth, fifth]
 % c
 
 E_0 = 1;
-d_1 = 2*sqrt(E_0) % d_min
-d_2 = sqrt(2)*2*sqrt(E_0)
-d_3 = sqrt(4*sqrt(E_0)^2+(2*sqrt(E_0))^2)
-d_4 = sqrt((-sqrt(E_0))^2+(-sqrt(E_0))^2)
-d_5 = 3*2*sqrt(E_0)
-d_6 = 2*2*sqrt(E_0)
+
+d1 = sqrt(4*E_0);
+d2 = sqrt(8*E_0);
+d3 = sqrt(16*E_0);
+d4 = sqrt(20*E_0);
+d5 = sqrt(36*E_0);
+d6 = sqrt(40*E_0);
+
+points = [-3, 1; -1, 1; 1, 1; 3, 1; -3, -1; -1, -1; 1, -1; 3, -1];
 
 
-distances = [d_1, d_2, d_3, d_4, d_5, d_6];
-sorted_distances = sort(distances);
+% distances = [d1, d2, d3, d4, d5, d6];
+% sorted_distances = sort(distances);
 
-counters = 0;
+count_d1 = 0;  
+count_d2 = 0; 
+count_d3 = 0;  
+count_d4 = 0; 
+count_d5 = 0;  
+count_d6 = 0; 
 
-for i = 1:length(sorted_distances)
-    for j = 1:length(distances)
-        if distances(j) == sorted_distances(i)
-            counters = counters + 1;
+distance = 0; 
+
+for i = 1:size(points, 1)
+    for j = 1:size(points, 1)
+        distance = norm(points(i, :) - points(j, :));
+        if distance == d1
+            count_d1 = count_d1 + 1;
+        elseif distance == d2
+            count_d2 = count_d2 + 1;
+        elseif distance == d3
+            count_d3 = count_d3 + 1;
+        elseif distance == d4
+            count_d4 = count_d4 + 1;
+        elseif distance == d5
+            count_d5 = count_d5 + 1;
+        elseif distance == d6
+            count_d6 = count_d6 + 1;
         end
     end
 end
+counters = count_d1 + count_d2 + count_d3 + count_d4 + count_d5 + count_d6;
 
 disp(['Total Pairs: ' num2str(counters)]);
 % d
-M = 8;
-gamma_b_values = linspace(0, 10, 100);  
-beta = 0.5:0.5:4;
-a_values = ones(1, M); 
-
-P_b_bound = zeros(size(gamma_b_values));
-for i = 1:length(gamma_b_values)
-    P_b_bound(i) = sum(a_values .* qfunc(sqrt(beta .* gamma_b_values(i))));
-end
-
-% e
-max_value = max(beta);
-min_value = min(beta);
-P_b_approx_max_at_2dB = a_values(1) * qfunc(sqrt(max_value * 2));
-P_b_approx_max_at_8dB = a_values(1) * qfunc(sqrt(max_value * 8));
-
-P_b_approx_min_at_2dB = a_values(1) * qfunc(sqrt(min_value * 2));
-P_b_approx_min_at_8dB = a_values(1) * qfunc(sqrt(min_value * 8));
-
-% f
+% M = 8;
 gamma_b_values_dB = 2:0.1:8;
 gamma_b_values = 10.^(gamma_b_values_dB / 10);
 
-P_err_bound = zeros(length(gamma_b_values), M);
-for i = 1:length(gamma_b_values)
-    P_err_bound(i, :) = a_values .* qfunc(sqrt(beta .* gamma_b_values(i)));
+beta = [2/2, 4/2, 8/2, 10/2, 18/2, 20/2];
+a_values = [count_d1, count_d2, count_d3, count_d4, count_d5, count_d6]/24;
+
+P_b_bound = zeros(size(gamma_b_values_dB));
+for i = 1:length(a_values)
+    P_b_bound = P_b_bound + (a_values(i) * qfunc(sqrt(beta(i) * gamma_b_values)))/3;
 end
-P_err_bound_sum = sum(P_err_bound, 2);
 
+% max_value = max(beta);
+% min_value = min(beta);
+% P_b_approx_max_at_2dB = a_values(1) * qfunc(sqrt(max_value * 2));
+% P_b_approx_max_at_8dB = a_values(1) * qfunc(sqrt(max_value * 8));
+% 
+% P_b_approx_min_at_2dB = a_values(1) * qfunc(sqrt(min_value * 2));
+% P_b_approx_min_at_8dB = a_values(1) * qfunc(sqrt(min_value * 8));]
 
-ratio_at_2dB = (1 - P_b_approx_max_at_2dB) ./ P_err_bound_sum(gamma_b_values_dB == 2);
-ratio_at_8dB = (1 - P_b_approx_max_at_8dB) ./ P_err_bound_sum(gamma_b_values_dB == 8);
-
-disp(['Ratio at 2dB: ' num2str(ratio_at_2dB)]);
-disp(['Ratio at 8dB: ' num2str(ratio_at_8dB)]);
-
+% f
+ratioat2dB = 1 - (P_b_bound(1)/sum(P_b_bound))
+ratioat8dB = 1 - (P_b_bound(end)/sum(P_b_bound))
 figure;
-hold on;
-semilogy(gamma_b_values_dB, 1 - P_err_bound_sum, 'DisplayName', 'Union Bound');
-semilogy(gamma_b_values_dB, ones(size(gamma_b_values_dB)) .* (1 - P_b_approx_max_at_8dB), '-.', 'DisplayName', 'Approximation (Max at 8dB)');
-semilogy(gamma_b_values_dB, ones(size(gamma_b_values_dB)) .* (1 - P_b_approx_min_at_2dB), ':', 'DisplayName', 'Approximation (Min at 2dB)');
-semilogy(gamma_b_values_dB, ones(size(gamma_b_values_dB)) .* (1 - P_b_approx_min_at_8dB), '-+', 'DisplayName', 'Approximation (Min at 8dB)');
-hold off;
-xlabel('Bit SNR (gamma_b) [dB]');
-ylabel('1 - Probability of Bit Error (1 - P_b)');
+semilogy(gamma_b_values_dB, P_b_bound, 'DisplayName', 'Union Bound');
+xlabel('Bit SNR / gamma_b (dB)');
+ylabel('P_b');
 title('Union Bound and Approximations for 8-ary QAM with Gray Coding');
 legend('Location', 'Best');
 grid on;
