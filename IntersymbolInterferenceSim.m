@@ -11,7 +11,7 @@ sps = 8;
 Rb = 1e6; 
 
 
-Rs = Rb / (log2(span) * sps);
+Rs = Rb / log2(span);
 
 % Design the square-root raised cosine filter using rcosdesign
 filterCoeff = rcosdesign(rolloff, span, sps, 'sqrt');
@@ -41,50 +41,44 @@ grid on;
 [maxValue, maxIndex] = max(g)
 
 %% f
-L = sps;
-m_values = 0:50;
-SIR_dB = zeros(size(m_values));
-a_m = 1;
-
-for m = m_values
-    sample_time = maxIndex + m * L;
-    if sample_time <= length(g) && sample_time - L  >= 1
-        target_value = a_m * g(sample_time);
-        interference_sum = sum(abs(g(sample_time - L + 1:sample_time - 1)).^2);
-        
-        SIR_linear = target_value^2 / interference_sum;
-
-        SIR_dB(m + 1) = 10 * log10(SIR_linear);
-    end
-end
+T_s = 1 / Rs;
+A_0 = 1; 
+A_max = max(abs(A_0));
+worstISI = sum(abs(g))*A_max; 
+sig_Power = A_max^2;
+worstISI_SIR_dB = 10 * log10(sig_Power / (worstISI^2))
 
 
 %% g
-W = 81.25 * 10^3; 
+W = (1+rolloff)*Rs/2; 
+
 t = linspace(0, span / Rs, span * sps + 1);
 f = linspace(0, W, length(t));
-G_f = sqrt((sinc(f / Rs)).^2 .* (sinc((f - Rs) / Rs)).^2);
-g_t = ifft(G_f);
+F_s = Rs * sps;
+
+G_f = abs(freqz(filterCoeff, 1, f, F_s)).^2;
+% g_t = ifft(G_f);
 
 % Plot
 figure;
-stem(t, g_t, 'LineWidth', 1.5);
+stem(f, G_f, 'LineWidth', 1.5);
 title('Impulse Response within [0, W]');
-xlabel('Time (s)');
-ylabel('Amplitude');
+xlabel('frequency');
+ylabel('Mag');
 grid on;
 
 
 %% h
-ava_ber = zeros(1,10); 
-ava_rms = zeros(1,10);
+SNR_values = [inf, -5, 5, 10];
+ava_ber = zeros(length(SNR_values), 10);
+ava_ms = zeros(length(SNR_values), 10);
 
-SNR_values = [50000000 -5 5 10];
+numofBits = 10^6;
 
 for t = 1:10
     for SNR_dB_index = 1:length(SNR_values) 
         SNR_dB = SNR_values(SNR_dB_index);
-        numofBits = 10^6;
+        
         bits = randi([0, 1], 1, numofBits);
         
         qpskSymbols = zeros(1, numofBits / 2);
@@ -94,18 +88,14 @@ for t = 1:10
             imp = bits(2*n-1);
             if (imp == 0) && (p == 0)
                 qpskSymbols(n) = exp(1j * pi/4);  % 45 degrees
-            end
-            if (imp == 1) && (p == 0)
+            elseif (imp == 1) && (p == 0)
                 qpskSymbols(n) = exp(1j * 3*pi/4);  % 135 degrees
-            end
-            if (imp == 1) && (p == 1)
+            elseif (imp == 1) && (p == 1)
                 qpskSymbols(n) = exp(1j * 5*pi/4);  % 225 degrees
-            end
-            if (imp == 0) && (p == 1)
+            elseif (imp == 0) && (p == 1)
                 qpskSymbols(n) = exp(1j * 7*pi/4);  % 315 degrees
             end
         end
-        
         
         sigma = sqrt(10^(-SNR_dB/10));
         noise = sigma * (randn(size(qpskSymbols)) + 1j * randn(size(qpskSymbols)));
@@ -115,32 +105,19 @@ for t = 1:10
         filteredSignal = conv(receivedSignal, filterCoeff);
         receivedSymbols = filteredSignal(1:sps:end);
        
-        decodedBits = zeros(1, length(receivedSymbols) * 2);
-            
-        for i = 1:length(receivedSymbols)
-            quadrant = sign(real(receivedSymbols(i))) + 1j * sign(imag(receivedSymbols(i)));
-            switch quadrant
-                case 1 + 1j
-                    decodedBits(2*i - 1:2*i) = [1 0];
-                case 1 - 1j
-                    decodedBits(2*i - 1:2*i) = [1 1];
-                case -1 + 1j
-                    decodedBits(2*i - 1:2*i) = [0 0];
-                case -1 - 1j
-                    decodedBits(2*i - 1:2*i) = [0 1];
-            end
-        end
+        decodedBits = real(receivedSymbols) > 0;
+        
         
         bits = bits(1:length(decodedBits));
         numErrors = sum(decodedBits ~= bits);
         ava_ber(SNR_dB_index,t) = numErrors / numofBits;
         
         qpskSymbols = qpskSymbols(1:length(receivedSymbols));
-        ava_rms(SNR_dB_index,t) = mean((qpskSymbols - receivedSymbols).^2);
+        ava_ms(SNR_dB_index,t) = mean((qpskSymbols - receivedSymbols).^2);
+
     end
 end
 
-
 disp(['Average BER: ' num2str(mean(ava_ber(:)))]);
-disp(['Average RMS: ' num2str(mean(ava_rms(:)))]);
+disp(['Average RMS: ' num2str(mean(ava_ms(:)))]);
 
